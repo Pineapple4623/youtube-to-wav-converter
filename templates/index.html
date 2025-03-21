@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">
+                <i class="fab fa-youtube text-red-600 mr-2"></i>
+                YouTube Downloader
+            </h1>
+            
+            <div class="space-y-6">
+                <!-- URL Input -->
+                <div>
+                    <label for="url" class="block text-sm font-medium text-gray-700 mb-2">
+                        YouTube URL
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="url" 
+                               class="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                               placeholder="Paste YouTube URL here">
+                        <button onclick="checkFormats()" 
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                            Check Formats
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Format Selection -->
+                <div id="formatSelection" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Select Format
+                    </label>
+                    <!-- Video Info -->
+                    <div id="videoInfo" class="mb-4 p-4 bg-gray-50 rounded-lg hidden">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2" id="videoTitle"></h3>
+                        <p class="text-sm text-gray-600" id="videoDuration"></p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Audio Formats -->
+                        <div id="audioFormats" class="space-y-2">
+                            <h3 class="text-lg font-semibold text-gray-800">Audio Formats</h3>
+                            <div class="space-y-2" id="audioOptions"></div>
+                        </div>
+                        
+                        <!-- Video Formats -->
+                        <div id="videoFormats" class="space-y-2">
+                            <h3 class="text-lg font-semibold text-gray-800">Video Formats</h3>
+                            <div class="space-y-2" id="videoOptions"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Button -->
+                <div class="text-center">
+                    <button onclick="convert()" 
+                            class="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            id="downloadBtn" disabled>
+                        <i class="fas fa-download mr-2"></i>
+                        Download
+                    </button>
+                </div>
+
+                <!-- Status Message -->
+                <div id="message" class="text-center text-sm"></div>
+
+                <!-- Loading Spinner -->
+                <div id="loading" class="hidden text-center">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                    <p class="mt-2 text-gray-600">Processing your request...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFormat = null;
+        let selectedQuality = null;
+
+        function showMessage(message, isError = false) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = `text-center text-sm ${isError ? 'text-red-600' : 'text-green-600'}`;
+            messageDiv.textContent = message;
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('downloadBtn').disabled = show;
+        }
+
+        async function checkFormats() {
+            const url = document.getElementById('url').value;
+            if (!url) {
+                showMessage('Please enter a YouTube URL', true);
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch('/get-formats', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url }),
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    showMessage(data.error, true);
+                    return;
+                }
+
+                displayFormats(data.formats);
+                document.getElementById('formatSelection').classList.remove('hidden');
+                document.getElementById('downloadBtn').disabled = false;
+            } catch (error) {
+                showMessage('Error checking formats: ' + error.message, true);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayFormats(formats) {
+            const audioOptions = document.getElementById('audioOptions');
+            const videoOptions = document.getElementById('videoOptions');
+            const videoInfo = document.getElementById('videoInfo');
+            const videoTitle = document.getElementById('videoTitle');
+            const videoDuration = document.getElementById('videoDuration');
+            
+            audioOptions.innerHTML = '';
+            videoOptions.innerHTML = '';
+
+            formats.forEach(format => {
+                if (format.type === 'audio') {
+                    format.formats.forEach(option => {
+                        const button = createFormatButton(option, 'audio');
+                        audioOptions.appendChild(button);
+                    });
+                } else if (format.type === 'video') {
+                    // Show video info
+                    videoInfo.classList.remove('hidden');
+                    videoTitle.textContent = format.title;
+                    videoDuration.textContent = `Duration: ${format.duration}`;
+                    
+                    // Add max quality info
+                    const maxQuality = document.createElement('p');
+                    maxQuality.className = 'text-sm text-gray-600 mt-1';
+                    maxQuality.textContent = `Maximum available quality: ${format.max_height}p`;
+                    videoInfo.appendChild(maxQuality);
+                    
+                    format.formats.forEach(option => {
+                        const button = createFormatButton(option, 'video');
+                        videoOptions.appendChild(button);
+                    });
+                }
+            });
+        }
+
+        function createFormatButton(option, type) {
+            const button = document.createElement('button');
+            button.className = 'w-full px-4 py-2 text-left rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500';
+            button.textContent = option.name;
+            
+            button.onclick = () => {
+                // Remove selected class from all buttons
+                document.querySelectorAll('button').forEach(btn => {
+                    btn.classList.remove('bg-blue-100', 'border-blue-500');
+                });
+                
+                // Add selected class to clicked button
+                button.classList.add('bg-blue-100', 'border-blue-500');
+                
+                selectedFormat = type;
+                selectedQuality = option.id;
+                
+                // Show a message if selecting best quality
+                if (option.id === 'best') {
+                    showMessage('Selected best available quality for this video', false);
+                }
+            };
+            
+            return button;
+        }
+
+        async function convert() {
+            if (!selectedFormat || !selectedQuality) {
+                showMessage('Please select a format and quality', true);
+                return;
+            }
+
+            const url = document.getElementById('url').value;
+            showLoading(true);
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url,
+                        media_type: selectedFormat,
+                        quality: selectedQuality
+                    }),
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = `youtube-${selectedFormat}-${selectedQuality}.${selectedFormat === 'audio' ? 'mp3' : 'mp4'}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    document.body.removeChild(a);
+                    showMessage('Download started!');
+                } else {
+                    const data = await response.json();
+                    showMessage(data.error || 'Download failed', true);
+                }
+            } catch (error) {
+                showMessage('Error during conversion: ' + error.message, true);
+            } finally {
+                showLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>
