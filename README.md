@@ -23,7 +23,7 @@ A full-stack web application that allows users to download audio and video from 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/youtube-downloader.git
+git clone https://github.com/Pineapple4623/youtube-downloader.git
 cd youtube-downloader
 ```
 
